@@ -3,19 +3,23 @@ package emailwitness;
 import java.io.IOException;
 import javax.servlet.http.*;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.mail.Address;
+import javax.mail.BodyPart;
+import javax.mail.Message.RecipientType;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import javax.servlet.ServletException;
-import javax.servlet.http.*;
+
+import com.google.appengine.api.datastore.DatastoreService;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.Entity;
 
 @SuppressWarnings("serial")
 public class EmailWitnessServlet extends HttpServlet {
@@ -30,50 +34,91 @@ public class EmailWitnessServlet extends HttpServlet {
 			Session session = Session.getDefaultInstance(props, null);
 			MimeMessage message = new MimeMessage(session, req.getInputStream());
 
-			//Extract out the important fields from the Mime Message
-			String subject = message.getSubject();
-			
-			_log.info("Got an email. Subject = " + subject);
-
-			String contentType = message.getContentType();
-			_log.info("Email Content Type : " + contentType);
-
-			_log.info(message.toString());
-			//printParts(message);
-			//Parse out the Multiparts
-			//Perform business logic based on the email
+			Entity mailEntity = createEmailMessage(message);
+			DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
+			datastore.put(mailEntity);
 		}
 		catch (Exception ex) {
-			_log.log(Level.WARNING, "Failure in receiving email : " + ex.getMessage());
+			_log.log(Level.WARNING, "Failed to receive email : " + ex.getMessage(), ex);
+			ex.printStackTrace();
 		}
 	}
 
-	private static void printParts(Part p) throws IOException, MessagingException {
+	private Entity createEmailMessage(MimeMessage message) throws MessagingException, IOException {
+		Entity emailMessage = new Entity("EmailMessage");
 		
-		Object o = p.getContent();
+		//Extract out the important fields from the Mime Message
+		String subject = message.getSubject();
+		String from = getAsCSV(message.getFrom());
+		String to = getAsCSV(message.getRecipients(RecipientType.TO));
+		String cc = getAsCSV(message.getRecipients(RecipientType.CC));
+		String body = getContentAsString(message); 
+				
+				
+		_log.log(Level.INFO, "Received email from " + from + " to: " + to + " , cc: " + cc + " with Subject: " + subject);
+		
+		if(!isNullOrEmpty(subject))
+			emailMessage.setProperty("subject", subject);
+		
+		if(!isNullOrEmpty(from))
+			emailMessage.setProperty("from", from);
+		
+		if(!isNullOrEmpty(to))
+			emailMessage.setProperty("to", to);
+		
+		if(!isNullOrEmpty(cc))
+			emailMessage.setProperty("cc", cc);
 
-		if (o instanceof String) {
-			System.out.println("This is a String");
-			System.out.println((String)o);
+		if(!isNullOrEmpty(cc))
+			emailMessage.setProperty("body", body);
+		
+		return emailMessage;
+	}
+
+	//Prefer text/plain over html or something else
+	private String getContentAsString(Part message) throws MessagingException, IOException {
+		String messageText = null;
+		Object content = message.getContent();
+		if (content instanceof String) {
+			messageText = (String)content;
 		}
-		else if (o instanceof Multipart) {
-			System.out.println("This is a Multipart");
-			Multipart mp = (Multipart)o;
-
-			int count = mp.getCount();
+		else if (content instanceof Multipart) {
+			Multipart multipart = (Multipart)content;
+			int count = multipart.getCount();
 			for (int i = 0; i < count; i++) {
-				printParts(mp.getBodyPart(i));
+				BodyPart part = multipart.getBodyPart(i);
+				Object content2 = part.getContent();
+				if (content2 instanceof String) {
+					messageText = (String)content2;
+					
+					//Prefer text/plain over html or something else
+					if(part.getContentType().contains("text/plain"))
+						break;
+				}
 			}
 		}
-		else if (o instanceof InputStream) {
-			System.out.println("This is just an input stream");
-			InputStream is = (InputStream)o;
-			int c;
-			while ((c = is.read()) != -1)
-				System.out.write(c);
-		}
+		return messageText;
 	}
 
+	private String getAsCSV(Address[] adresses) {
+		String csv = null;
+		if(adresses != null) {
+			for (Address address : adresses) {
+				if(csv == null) {
+					csv = "";
+				}
+				else {
+					csv += ","; 
+				}
+				csv += address.toString();
+			}
+		}
+		return csv;
+	}
+
+	private boolean isNullOrEmpty(String s) {
+		return s == null || s.length() == 0;
+	}
 }
 
 //@SuppressWarnings("serial")
