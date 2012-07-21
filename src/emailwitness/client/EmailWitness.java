@@ -1,5 +1,8 @@
 package emailwitness.client;
 
+import java.util.List;
+
+import emailwitness.shared.EmailMessageSummary;
 import emailwitness.shared.FieldVerifier;
 import com.google.gwt.core.client.EntryPoint;
 import com.google.gwt.core.client.GWT;
@@ -49,12 +52,37 @@ public class EmailWitness implements EntryPoint {
 
 		// Add the nameField and sendButton to the RootPanel
 		// Use RootPanel.get() to get the entire body element
-		RootPanel.get("nameFieldContainer").add(nameField);
+		RootPanel rootPanel = RootPanel.get("nameFieldContainer");
+		rootPanel.add(nameField);
 		RootPanel.get("sendButtonContainer").add(sendButton);
 		RootPanel.get("errorLabelContainer").add(errorLabel);
 
 		// Focus the cursor on the name field when the app loads
 		nameField.setFocus(true);
+		
+		final Label lblNewLabel = new Label("New label");
+		EmailListServiceAsync emailListService = EmailListService.Util.getInstance();
+		emailListService.getEmailList(new AsyncCallback<List<EmailMessageSummary>>() {
+			
+			@Override
+			public void onSuccess(List<EmailMessageSummary> result) {
+				String text = "";
+				for (EmailMessageSummary email : result) {
+					text += "\n" + email.getTo();	
+				}
+				
+				lblNewLabel.setText(text);
+				
+			}
+			
+			@Override
+			public void onFailure(Throwable caught) {
+				// TODO Auto-generated method stub
+				
+			}
+		});
+		
+		rootPanel.add(lblNewLabel, 10, 90);
 		nameField.selectAll();
 
 		// Create the popup dialog box

@@ -38,5 +38,13 @@
   <welcome-file-list>
     <welcome-file>EmailWitness.html</welcome-file>
   </welcome-file-list>
+  <servlet>
+  	<servlet-name>EmailListService</servlet-name>
+  	<servlet-class>emailwitness.server.EmailListServiceImpl</servlet-class>
+  </servlet>
+  <servlet-mapping>
+  	<servlet-name>EmailListService</servlet-name>
+  	<url-pattern>/emailwitness/EmailListService</url-pattern>
+  </servlet-mapping>
 
 </web-app>
